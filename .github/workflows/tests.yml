@@ -1,0 +1,112 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22', '24']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+
+      - name: The safe fixtures produce no findings at all
+        # This is the only check that keeps the heuristics honest. Every rule
+        # here is easy to make fire; the hard part is not firing on the code
+        # that got it right, so a single finding in this directory is a bug.
+        run: |
+          count=$(node dist/cli.js scan test/fixtures/safe --format json \
+                    | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);console.log((r.runs?.[0]?.results??r.findings??[]).length)})')
+          if [ "$count" != "0" ]; then
+            echo "safe fixtures produced $count finding(s)"
+            node dist/cli.js scan test/fixtures/safe
+            exit 1
+          fi
+          echo "safe fixtures: 0 findings"
+
+      - name: Every rule fires on its own vulnerable fixture
+        # A rule with no true positive is a rule nobody has tested.
+        run: |
+          node dist/cli.js rules --format json > rules.json
+          node dist/cli.js scan test/fixtures/vulnerable --format json > found.json
+          node -e '
+            const rules = require("./rules.json");
+            const run = require("./found.json");
+            const results = run.runs?.[0]?.results ?? run.findings ?? [];
+            const fired = new Set(results.map((r) => r.ruleId));
+            const ids = (Array.isArray(rules) ? rules : rules.rules).map((r) => r.id);
+            const silent = ids.filter((id) => !fired.has(id));
+            if (silent.length) {
+              console.error(`rules with no true positive: ${silent.join(", ")}`);
+              process.exit(1);
+            }
+            console.log(`${ids.length} rules, all with a firing fixture`);
+          '
+
+      - name: SARIF output is shaped the way code scanning expects
+        run: |
+          node dist/cli.js scan test/fixtures/vulnerable --format sarif > out.sarif
+          node -e '
+            // Node only parses JSON for a .json extension; require() on any
+            // other suffix compiles it as CommonJS, so .sarif has to be read.
+            const s = JSON.parse(require("node:fs").readFileSync("./out.sarif", "utf8"));
+            if (s.version !== "2.1.0") { console.error(`version ${s.version}`); process.exit(1); }
+            const run = s.runs?.[0];
+            if (!run?.tool?.driver?.rules?.length) { console.error("no rule metadata"); process.exit(1); }
+            const declared = new Set(run.tool.driver.rules.map((r) => r.id));
+            for (const r of run.results) {
+              if (!declared.has(r.ruleId)) { console.error(`result for undeclared rule ${r.ruleId}`); process.exit(1); }
+              const loc = r.locations?.[0]?.physicalLocation;
+              if (!loc?.artifactLocation?.uri || !loc?.region?.startLine) {
+                console.error(`result for ${r.ruleId} has no usable location`);
+                process.exit(1);
+              }
+            }
+            console.log(`SARIF 2.1.0, ${run.results.length} results, all located and declared`);
+          '
+
+      - name: --exit-code is usable as a gate
+        run: |
+          node dist/cli.js scan test/fixtures/safe --exit-code \
+            || { echo "exit 1 on clean input"; exit 1; }
+          if node dist/cli.js scan test/fixtures/vulnerable --exit-code; then
+            echo "exit 0 despite findings"
+            exit 1
+          fi
+          echo "exit codes: 0 clean, 1 on findings"
+
+      - name: Runtime dependencies are exactly acorn and acorn-walk
+        # A static analyser's dependency set is part of its threat model: every
+        # production dependency runs in the same process as the untrusted source
+        # being parsed. Pinned exactly, and asserted so a transitive addition
+        # cannot arrive unnoticed.
+        run: |
+          # --parseable lists the project root too; only lines under
+          # node_modules are dependencies.
+          npm ls --omit=dev --all --parseable \
+            | grep '/node_modules/' \
+            | sed 's|.*/node_modules/||' \
+            | sort -u > deps.txt
+          cat deps.txt
+          printf 'acorn\nacorn-walk\n' | diff - deps.txt \
+            || { echo "production dependency set changed"; exit 1; }
+          echo "exactly acorn and acorn-walk, as pinned"
