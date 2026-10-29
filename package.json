@@ -1,0 +1,60 @@
+{
+  "name": "node-sandbox-audit",
+  "version": "0.1.0",
+  "description": "Static detection of incomplete module denylists and unsafe context configuration in JavaScript sandboxes built on node:vm, vm2 and isolated-vm.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "node-sandbox-audit": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && chmod +x dist/cli.js",
+    "clean": "rm -rf dist",
+    "test": "npm run build && node --test test/*.test.js",
+    "prepublishOnly": "npm run clean && npm run build && npm test"
+  },
+  "keywords": [
+    "security",
+    "static-analysis",
+    "sandbox",
+    "sandbox-escape",
+    "vm",
+    "vm2",
+    "isolated-vm",
+    "sast",
+    "sarif",
+    "nodejs"
+  ],
+  "author": "David Nichols",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Young-Syre/node-sandbox-audit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Young-Syre/node-sandbox-audit/issues"
+  },
+  "homepage": "https://github.com/Young-Syre/node-sandbox-audit#readme",
+  "dependencies": {
+    "acorn": "8.19.0",
+    "acorn-walk": "8.3.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^5.9.3"
+  }
+}
