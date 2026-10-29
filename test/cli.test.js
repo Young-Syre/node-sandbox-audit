@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
 
 import { RULE_IDS } from '../dist/index.js';
@@ -180,4 +183,42 @@ test('stdout closing early is not an error', () => {
   assert.equal(result.status, 0);
   assert.ok(result.stderr.includes('EPIPE') === false, result.stderr);
   assert.ok(result.stdout.startsWith('NSA001'));
+});
+
+test('no input files exits 2, as the help text says', () => {
+  // Reporting "No findings" and exiting 0 means a CI gate using the Actions
+  // example in the README goes green forever the first time a directory is
+  // renamed -- the one failure mode a gate must not have.
+  const empty = mkdtempSync(join(tmpdir(), 'nsa-empty-'));
+  try {
+    const cases = [
+      { args: ['scan', 'no-such-dir', '--exit-code'], why: 'a path that does not exist' },
+      { args: ['scan', empty, '--exit-code'], why: 'a directory with nothing in it' },
+      { args: ['scan', SAFE_DIR, '--ext', '.nope'], why: 'no file matching --ext' },
+    ];
+    for (const { args, why } of cases) {
+      const { status, stderr } = run(args);
+      assert.equal(status, 2, `${why}: ${stderr}`);
+      assert.ok(stderr.includes('no input files matched'), `${why}: ${stderr}`);
+    }
+  } finally {
+    rmSync(empty, { recursive: true, force: true });
+  }
+});
+
+test('a path that resolves to files still scans and exits on findings', () => {
+  const clean = run(['scan', fixturePath('safe', 'timeouts-everywhere.js'), '--exit-code']);
+  assert.equal(clean.status, 0, clean.stderr);
+  assert.ok(clean.stdout.includes('1 file scanned'), clean.stdout);
+
+  const dirty = run(['scan', VULNERABLE_DIR, '--exit-code']);
+  assert.equal(dirty.status, 1, dirty.stderr);
+});
+
+test("'rules' refuses a format it cannot produce", () => {
+  // It used to fall back to the text table, which left a script parsing a
+  // plain-text table as JSON.
+  const { status, stderr } = run(['rules', '--format', 'sarif']);
+  assert.equal(status, 2);
+  assert.ok(stderr.includes('not sarif'), stderr);
 });

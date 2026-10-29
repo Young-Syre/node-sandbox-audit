@@ -177,6 +177,11 @@ node-sandbox-audit rules [--format text|json]
 | `--color` / `--no-color` | Force or disable ANSI colour. Default: auto, and `NO_COLOR` is honoured. |
 
 Exit codes: `0` completed, `1` findings reported with `--exit-code`, `2` bad usage or no input.
+
+"No input" is exit `2`, not `0`. A path that does not exist, a directory with
+nothing in it, and a directory with nothing matching `--ext` all fail rather
+than reporting no findings — otherwise the CI step below goes green forever the
+first time `src` is renamed.
 `node_modules`, `.git`, `dist`, `build`, `coverage`, `.next` and `out` are skipped while walking.
 Files that cannot be read or parsed produce a warning on stderr and are skipped, so stdout stays
 machine-readable.

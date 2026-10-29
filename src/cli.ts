@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-import { formatJson } from './report/json.js';
+import { formatJson, formatRuleCatalogue } from './report/json.js';
 import { formatSarif } from './report/sarif.js';
 import { formatText } from './report/text.js';
 import { RULES, RULE_IDS, isRuleId } from './rules.js';
 import { collectFiles, DEFAULT_EXCLUDED_DIRS, DEFAULT_EXTENSIONS, scanFiles } from './scanner.js';
-import { isSeverity, severityRank, type RuleId, type ScanError, type Severity } from './types.js';
+import { isSeverity, type RuleId, type ScanError, type Severity } from './types.js';
 import { TOOL_NAME, VERSION } from './version.js';
 
 const EXIT_OK = 0;
@@ -191,7 +191,7 @@ function useColor(options: Options): boolean {
 
 function printRules(format: Format): void {
   if (format === 'json') {
-    process.stdout.write(`${JSON.stringify(Object.values(RULES), null, 2)}\n`);
+    process.stdout.write(`${formatRuleCatalogue()}\n`);
     return;
   }
   for (const ruleId of RULE_IDS) {
@@ -210,6 +210,18 @@ function runScan(paths: readonly string[], options: Options): number {
   };
 
   const files = collectFiles(paths, options.extensions, new Set(DEFAULT_EXCLUDED_DIRS), onError);
+  if (files.length === 0) {
+    // Exit 2, as the help text says. Reporting "no findings" and exiting 0
+    // means a CI gate goes green forever the first time a directory is
+    // renamed -- which is the one failure mode a gate must not have.
+    for (const error of errors) {
+      process.stderr.write(`warning: ${error.file}: ${error.message}\n`);
+    }
+    throw new UsageError(
+      `no input files matched ${paths.map((path) => JSON.stringify(path)).join(', ')}` +
+        ` (extensions: ${options.extensions.join(', ')})`,
+    );
+  }
   const findings = scanFiles(files, {
     rules: options.rules,
     ignoreRules: options.ignoreRules,
@@ -234,9 +246,9 @@ function runScan(paths: readonly string[], options: Options): number {
     );
   }
 
-  const threshold = severityRank(options.severityThreshold);
-  const reportable = findings.filter((finding) => severityRank(finding.severity) >= threshold);
-  return options.exitCode && reportable.length > 0 ? EXIT_FINDINGS : EXIT_OK;
+  // scanFiles already applied severityThreshold, so re-filtering here always
+  // returned the same array.
+  return options.exitCode && findings.length > 0 ? EXIT_FINDINGS : EXIT_OK;
 }
 
 function main(argv: readonly string[]): number {
@@ -265,7 +277,12 @@ function main(argv: readonly string[]): number {
       case 'scan':
         return runScan(parsed.paths, parsed.options);
       case 'rules':
-        printRules(parsed.options.format === 'json' ? 'json' : 'text');
+        if (parsed.options.format === 'sarif') {
+          // SARIF describes results, not a catalogue. Printing the text table
+          // instead of saying so left a script parsing plain text as JSON.
+          throw new UsageError("'rules' supports --format text or json, not sarif");
+        }
+        printRules(parsed.options.format);
         return EXIT_OK;
       default:
         throw new UsageError(`unknown command '${parsed.command}'. Use 'scan' or 'rules'.`);
