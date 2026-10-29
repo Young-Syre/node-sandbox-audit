@@ -163,7 +163,7 @@ export function detect(ctx: FileContext): Finding[] {
 
     if (path === 'Object.setPrototypeOf') {
       const proto = argAt(call.arguments, 1);
-      if (proto !== null && isLiteral(proto) && proto.value === null) return;
+      if (isLiteral(proto) && proto.value === null) return;
       findings.push(
         createFinding(ctx, {
           ruleId: 'NSA008',

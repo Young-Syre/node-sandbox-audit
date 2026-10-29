@@ -105,10 +105,6 @@ export function stripNodePrefix(specifier: string): string {
   return specifier.startsWith('node:') ? specifier.slice(5) : specifier;
 }
 
-export function hasNodePrefix(specifier: string): boolean {
-  return specifier.startsWith('node:');
-}
-
 export function isNodeBuiltin(specifier: string): boolean {
   return NODE_BUILTINS.has(stripNodePrefix(specifier));
 }

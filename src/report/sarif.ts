@@ -80,7 +80,9 @@ export function buildSarifReport(
 
   const results = findings.map((finding) => ({
     ruleId: finding.ruleId,
-    ruleIndex: ruleIndex.get(finding.ruleId) ?? 0,
+    // RULE_IDS holds every RuleId, so this cannot miss. A `?? 0` here would
+    // point a result at whichever rule happens to be first.
+    ruleIndex: ruleIndex.get(finding.ruleId)!,
     level: LEVEL_BY_SEVERITY[finding.severity],
     message: { text: messageText(finding) },
     locations: [

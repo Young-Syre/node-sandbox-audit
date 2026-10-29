@@ -258,7 +258,7 @@ export function isBareObjectCreateNull(node: AstNode | null): boolean {
   if (!path || path.join('.') !== 'Object.create') return false;
   const first = argAt(call.arguments, 0);
   return (
-    call.arguments.length <= 1 && isLiteral(first ?? undefined) && (first as Literal).value === null
+    call.arguments.length <= 1 && isLiteral(first) && first.value === null
   );
 }
 

@@ -45,7 +45,7 @@ export function formatJson(findings: readonly Finding[], options: JsonReportOpti
   return JSON.stringify(buildJsonReport(findings, options), null, 2);
 }
 
-/** The rule catalogue, for `--list-rules --format json`. */
+/** The rule catalogue, for `nsa rules --format json`. */
 export function formatRuleCatalogue(): string {
   return JSON.stringify(Object.values(RULES), null, 2);
 }

@@ -28,7 +28,7 @@ import {
   type UnaryExpression,
   type VariableDeclarator,
 } from './ast.js';
-import { NODE_BUILTINS, stripNodePrefix } from './builtins.js';
+import { isNodeBuiltin, stripNodePrefix } from './builtins.js';
 
 export type Polarity = 'deny' | 'allow' | 'unknown';
 
@@ -343,7 +343,7 @@ export class FileContext {
 
     const direct = this.inlineRequireModule(init);
     if (direct !== null) {
-      this.bindPattern(decl.id, direct, null);
+      this.bindPattern(decl.id, direct);
       return;
     }
 
@@ -361,11 +361,11 @@ export class FileContext {
     // `const { createContext } = vm`
     if (isIdentifier(expr) && decl.id.type === 'ObjectPattern') {
       const module = this.moduleOf(expr.name);
-      if (module !== null) this.bindPattern(decl.id, module, null);
+      if (module !== null) this.bindPattern(decl.id, module);
     }
   }
 
-  private bindPattern(pattern: AstNode, module: string, _member: string | null): void {
+  private bindPattern(pattern: AstNode, module: string): void {
     if (isIdentifier(pattern)) {
       this.bindNamespace(pattern.name, module, pattern);
       return;
@@ -470,7 +470,7 @@ export class FileContext {
     entries: CollectionEntry[],
     ancestors: readonly AstNode[],
   ): void {
-    const builtinEntries = entries.filter((entry) => NODE_BUILTINS.has(stripNodePrefix(entry.value)));
+    const builtinEntries = entries.filter((entry) => isNodeBuiltin(entry.value));
     if (builtinEntries.length === 0) return;
 
     const nameHint = nameHintFrom(ancestors);

@@ -47,8 +47,9 @@ export function detect(ctx: FileContext): Finding[] {
       .filter((entry, index, all) => all.findIndex((e) => e.value === entry.value) === index);
 
     if (prefixGaps.length > 0) {
-      const anchor = prefixGaps[0];
-      if (!anchor) continue;
+      // noUncheckedIndexedAccess types this as possibly undefined; the length
+      // check above is why it is not.
+      const anchor = prefixGaps[0]!;
       const details = prefixGaps.map((entry) => {
         const bare = stripNodePrefix(entry.value);
         const missingSpelling = written.has(bare) ? `node:${bare}` : bare;
